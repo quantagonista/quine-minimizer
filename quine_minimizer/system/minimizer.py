@@ -1,3 +1,16 @@
+class Implicant():
+    def __init__(self, string, coverage):
+        self.string = string
+        self.coverage = coverage
+        self.weight = sum([1 for x in string if x != 'X']) + sum([1 for x in string if x == '0'])
+
+    def __repr__(self):
+        return self.string
+
+    def __gt__(self, other):
+        return self.weight <= other.weight and sum(self.coverage) >= sum(other.coverage)
+
+
 class Minimizer():
     constant = 'X'
 
@@ -5,59 +18,74 @@ class Minimizer():
         self.primary_implicants = []
         self.count = count
         self.terms = [[int(i) for i in list("{number:0{base}b}".format(number=x, base=count))] for x in arguments]
+        self.table_terms = [[''.join(i for i in list("{number:0{base}b}".format(number=x, base=count)))] for x in
+                            range(2 ** int(count))]
+        for i in range(2 ** int(count)):
+            if i in arguments:
+                self.table_terms[i].append('1')
+            else:
+                self.table_terms[i].append('0')
 
     def find_core_implicants(self, table):
+        if self.terms == self.primary_implicants:
+            return self.terms
+
         core = []
         width = len(table[0])
         height = len(table)
-        columns = []
-        rows = []
-        coverage = []
-
+        core_columns = []
+        core_rows = []
+        others_rows = None
+        others_columns = None
+        coverage = [0 for _ in range(width)]
+        self.print_implicants(table)
         # finding indices for FIRST core implicants
-        for j in range(width):
-            s = 0
-            for i in range(height):
-                s += table[i][j]
-            if s == 1:
-                columns.append(j)
+        s = [sum([x[j] for x in table]) for j in range(width)]
+        for i in range(len(s)):
+            if s[i] == 1:
+                core_columns.append(i)
 
         # adding FC implicants and finding indices for them
-        for j in columns:
+        for j in core_columns:
             for i in range(height):
                 if table[i][j] == 1:
                     implicant = self.primary_implicants[i]
                     if implicant not in core:
                         core.append(implicant)
-                        rows.append(i)
+                        core_rows.append(i)
 
-        for i in rows:
-            coverage.append(sum(table[i]))
-        coverage = sum(coverage)
-        if coverage >= width:
-            # job done
+        for r in core_rows:
+            for c in range(width):
+                if table[r][c] == 1:
+                    if c not in core_columns:
+                        core_columns.append(c)
+
+        for i in core_rows:
+            coverage = self.add_to_coverage(coverage, table[i])
+
+        if sum(coverage) >= width:
             return core
         else:
-            pass
+            others_columns = set(range(width)) - set(core_columns)
+            others_rows = set(range(height)) - set(core_rows)
+            print('o_cols:', others_columns)
+            print('o_rows:', others_rows)
 
-        shortenned_table_one = []
-
-        for i in range(height):
-            if i not in rows:
-                shortenned_table_one.append(table[i])
-
-        shortenned_table_two = [[] for _ in range(len(shortenned_table_one))]
-        for i in range(len(shortenned_table_one)):
-            for j in range(width):
-                if j not in columns:
-                    shortenned_table_two[i].append(shortenned_table_one[i][j])
-
-        self.print_implicants(table)
-
-        print('SHORT:::')
-        self.print_implicants(shortenned_table_two)
-
-        return core
+            secondary_implicants_strings = [''.join(str(x) for x in self.primary_implicants[i]) for i in others_rows]
+            secondary_implicants_coverages = [table[row] for row in others_rows]
+            secondary_implicants = [Implicant(secondary_implicants_strings[i], secondary_implicants_coverages[i]) for i
+                                    in range(len(secondary_implicants_strings))]
+            last = sum(coverage)
+            while sum(coverage) < width:
+                index = secondary_implicants.index(max(secondary_implicants))
+                item = secondary_implicants.pop(index)
+                if sum(self.add_to_coverage(coverage, item.coverage)) > last:
+                    a = self.to_arr(item)
+                    core.append(a)
+                    coverage = self.add_to_coverage(coverage, item.coverage)
+                    last = sum(coverage)
+            print(core)
+            return core
 
     def build_coverage_table(self):
         term_len = len(self.terms)
@@ -74,7 +102,7 @@ class Minimizer():
     def find_primary_implicants(self):
         primary_implicants = self.terms
         last = []
-        result = []
+        result = self.terms.copy()
 
         while True:
             x = self.merge_implicants(primary_implicants)
@@ -82,11 +110,31 @@ class Minimizer():
                 if x != last:
                     primary_implicants = self.merge_implicants(primary_implicants)
                     last = primary_implicants.copy()
-                    # result.extend(last)
+                    result.extend(last)
                 else:
                     break
             else:
                 break
+        if result == self.terms:
+            self.primary_implicants = result
+            return result
+
+        primary_implicants = []
+        result = result[::-1]
+
+        for i in range(len(result)):
+            implicant = result[i]
+            for j in range(i + 1, len(result)):
+                term = result[j]
+                if not self.is_in(implicant, term) and not implicant == term:
+                    if implicant not in primary_implicants:
+                        x = 0
+                        for i in primary_implicants:
+                            if not self.is_in(i, implicant):
+                                x = x + 1
+                        if x == len(primary_implicants):
+                            primary_implicants.append(implicant)
+
         self.primary_implicants = primary_implicants
         return primary_implicants
 
@@ -148,7 +196,7 @@ class Minimizer():
     @staticmethod
     def equals(a, b):
         if type(a) != type(b):
-            return 1
+            return type(a) is str
         else:
             return int(a == b)
 
@@ -176,3 +224,19 @@ class Minimizer():
 
     def to_str(self, array):
         return ''.join(map(lambda x: str(x), array))
+
+    def to_arr(self,string):
+        result = []
+        for i in string.string:
+            if i == 'X':
+                result.append(i)
+            else:
+                result.append(int(i))
+        return result
+
+    def add_to_coverage(self, a, b):
+        return [self.add(a[i], b[i]) for i in range(len(a))]
+
+    @staticmethod
+    def add(a, b):
+        return int(not a + b < 1)

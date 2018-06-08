@@ -4,52 +4,157 @@
 <head>
     <meta charset="UTF-8">
     <script src="{% static 'js/jquery.js' %}"></script>
-    <script src="{% static 'js/bootstrap.min.js.js' %}"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script>
+    <script src="{% static 'js/particles.json' %}"></script>
     <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
-    <link rel="stylesheet" href="{% static 'css/bootstrap-grid.min.css.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/bootstrap-grid.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <title>Quine Minimizer</title>
 </head>
-<body>
-<h1>Минимизатор Квайна</h1>
-<form class="form-row" method="post">
-    {% csrf_token %}
-    <input name="args_count" type="text" placeholder="Введите кол-во переменных">
-    <input name="args" type="text" placeholder="Введите переменныe">
-    <input type="submit" value="Далее">
-</form>
+<body class="text-dark">
+<div id="particles-js" class="float-left m-auto" style="z-index: -1"></div>
+<div style="position: absolute;left: 0px;top: 0px;z-index: 1;" class="p-3">
+    <h1>Минимизатор Квайна</h1>
+    <form class="form-col form-group" method="post">
+        {% csrf_token %}
+        <input name="args_count" type="text" placeholder="Введите кол-во переменных"
+               class="form-control mb-3 col-12">
+        <input name="args" type="text" placeholder="Введите переменныe" class="form-control mb-3 col-12">
+        <input type="submit" value="Далее" class="btn btn-dark">
+    </form>
 
-{% if primary_implicants %}
-    <h5>Первичные импликанты:</h5>
-    {% for implicant in primary_implicants %}
-        <h3>{{ implicant }}</h3>
-    {% endfor %}
-{% endif %}
+    {% if terms %}
+        <h4 class="font-weight-bold">Начальная Форма:</h4>
+        <div class="m-3 font-weight-light">
+            {{ terms }}
+        </div>
+    {% endif %}
 
-{% if table %}
-    <h5>Таблица покрытий</h5>
-    <table class="table">
-        <thead>
-        <tr>
-            <th scope="col">N</th>
-            {% for term in terms %}
-                <th scope="col">{{ term }}</th>
+    {% if first_implicants %}
+        <h4 class="font-weight-bold">Возможные импликанты:</h4>
+        <div class="m-3 font-weight-light">
+            {% for implicant in first_implicants %}
+                <span class="variable">{{ implicant }}</span>
+                <span>^</span>
             {% endfor %}
-        </tr>
-        </thead>
 
-        <tbody>
-        {% for implicant in primary_implicants %}
-            <tr>
-                <th scope="row">{{ implicant }}</th>
-                {% for item in table.0 %}
-                    <td>{{ item }}</td>
+        </div>
+    {% endif %}
+
+
+    {% if boolean %}
+        <h4 class="font-weight-bold">Минимальная Форма (Булев Базиз):</h4>
+        <div class="m-3">
+            {% for implicant in boolean %}
+                <span class="variable">{{ implicant }}</span>
+                <span>^</span>
+            {% endfor %}
+
+        </div>
+        <div class="text-center m-3">
+            <button id="shefferButton" type="button" class="btn btn-lg btn-dark">Базис Шеффера</button>
+            <button id="pierceButton" type="button" class="btn btn-lg btn-dark">Базис Пирса</button>
+        </div>
+    {% endif %}
+
+    <div id="sheffer">
+        {% if sheffer %}
+            <h4 class="font-weight-bold">Минимальная Форма (Базис Шеффера):</h4>
+            <div class="m-3">
+                {% for implicant in sheffer %}
+                    <span class="variable">{{ implicant }}</span>
+                    <span>/</span>
                 {% endfor %}
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-{% endif %}
+            </div>
+        {% endif %}
+    </div>
 
+    <div id="pierce">
+        {% if pearce %}
+            <h4 class="font-weight-bold">Минимальная Форма (Базис Пирса):</h4>
+            <div class="m-3">
+                <span>{</span>
+                {% for implicant in pearce %}
+                    <span class="variable">{{ implicant }}</span>
+                    <span>|</span>
+                {% endfor %}
 
+                <span>}</span>
+                <span>|</span>
+                <span>{</span>
+
+                {% for implicant in pearce %}
+                    <span class="variable">{{ implicant }}</span>
+                    <span>|</span>
+                {% endfor %}
+                <span>}</span>
+            </div>
+        {% endif %}
+    </div>
+
+    <div>
+        {% if table_terms %}
+            <h5>Таблица Эквивалентности</h5>
+            <table class="table table-bordered text-center">
+                <thead>
+                <tr>
+                    <th scope="col">N</th>
+                    <th scope="col">Аргументы</th>
+                    <th scope="col">F(x)</th>
+                    <th scope="col" style="font-size: 9px">
+                        {% for implicant in boolean %}
+                            <span class="variable">{{ implicant }}</span>
+                            <span>^</span>
+                        {% endfor %} </th>
+
+                    <th scope="col">
+                        {% if sheffer %}
+                            <div style="font-size: 9px">
+                                {% for implicant in sheffer %}
+                                    <span class="variable">{{ implicant }}</span>
+                                    <span>/</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}</th>
+                    <th scope="col">
+                        {% if pearce %}
+                            <div style="font-size: 9px">
+                                <span>{</span>
+                                {% for implicant in pearce %}
+                                    <span class="variable">{{ implicant }}</span>
+                                    <span>|</span>
+                                {% endfor %}
+                                <span>}</span>
+                                <span>|</span>
+                                <span>{</span>
+                                {% for implicant in pearce %}
+                                    <span class="variable">{{ implicant }}</span>
+                                    <span>|</span>
+                                {% endfor %}
+
+                                <span>}</span>
+                            </div>
+                        {% endif %} </th>
+                </tr>
+                </thead>
+
+                <tbody>
+                {% for term in table_terms %}
+                    <tr>
+                        <th scope="row">{{ forloop.counter }}</th>
+                        <td>{{ term.0 }}</td>
+                        <td>{{ term.1 }}</td>
+                        <td>{{ term.1 }}</td>
+                        <td>{{ term.1 }}</td>
+                        <td>{{ term.1 }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+</div>
+<script src="{% static "js/particles.js" %}"></script>
+<script src="{% static "js/app.js" %}"></script>
 </body>
 </html>
